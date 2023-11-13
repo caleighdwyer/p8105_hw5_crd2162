@@ -66,10 +66,10 @@ murder_data |>
   knitr::kable()
 ```
 
-We will now use the prop.test function to estimate the proportion of homicides that are unsolved in Baltimore, MD. 
+We will now use the prop.test function to estimate the proportion of homicides that are unsolved in Baltimore, MD. The estimated proportion of unsolved homicides in Baltimore was 64.6% with a confidence interval of 62.8%-66.3%
 
 ```{r}
-prop_murder =
+prop_bmd =
 murder_data |> 
   filter(city_state == "Baltimore, MD") |> 
   summarize(
@@ -80,7 +80,36 @@ murder_data |>
   with(prop.test(total_unsolved,total_murder)) |> 
   broom::tidy() |> 
   select(estimate, conf.low, conf.high)
-  
+
+print(prop_bmd)
+
 ```
 
+
+```{r}
+# function 
+prop_function <- function(dataset, name) {
+  prop = dataset |> 
+  filter(city_state == name) |> 
+  summarize(
+    total_murder = n(),
+    total_unsolved = sum(
+           disposition %in% c("Closed without arrest", "Open/No arrest")
+         )) |> 
+  with(prop.test(total_unsolved,total_murder)) |> 
+  broom::tidy() |> 
+  select(estimate, conf.low, conf.high)
+  return(prop)
+}
+
+cities = unique(murder_data$city_state)
+table = map(cities, ~ prop_function(murder_data, .x))
+
+# Using list columns
+# Unnesting the list column
+prob_unsolved = 
+  tibble(city = cities, prop = table) |> 
+  unnest(cols = c(prop))
+
+```
 
