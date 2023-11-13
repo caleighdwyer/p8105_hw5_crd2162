@@ -12,7 +12,7 @@ library(tidyverse)
 knitr::opts_chunk$set(
 	echo = TRUE,
 	warning = FALSE,
-  fig.width = 6,
+  fig.width = 10,
   fig.asp = .6,
   out.width = "90%"
 )
@@ -85,6 +85,7 @@ print(prop_bmd)
 
 ```
 
+The chunk below creates a function that applies the prop.test used above, producing the estimated proportion of unsolved murders for each input along with the confidence interval. Then, map is used to pass a list of the 50 cities through the function, producing the output for each city. The outputs are then consolidated into a tibble.
 
 ```{r}
 # function 
@@ -110,6 +111,20 @@ table = map(cities, ~ prop_function(murder_data, .x))
 prob_unsolved = 
   tibble(city = cities, prop = table) |> 
   unnest(cols = c(prop))
-
 ```
+
+The chunk below produces a plot showing the estimates and confidence intervals for each city.
+
+```{r}
+unsolved_plot =
+  prob_unsolved |> 
+  mutate(city = forcats::fct_reorder(city, estimate)) |> 
+ggplot(aes(x = city, y = estimate, fill = city))+
+  geom_bar(stat = "identity")+
+  labs(title = "Estimated proportion of unsolved murders by city", x = "City", y = "Proportion of murders that are unsolved") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+print(unsolved_plot)
+```
+
 
