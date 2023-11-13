@@ -113,7 +113,7 @@ prob_unsolved =
   unnest(cols = c(prop))
 ```
 
-The chunk below produces a plot showing the estimates and confidence intervals for each city.
+The chunk below produces a graph showing the estimated proportion of unsolved murders for each city (on a scale of 0 to 1) along with corresponding confidence intervals. The graph shows that Chicago, New Orleans, Baltimore, San Bernardino, and Buffalo had the five highest proportions of unsolved murders. Notably, the confidence interval for the proportion of unsolved murders was very narrow for Chicago and much wider for San Bernardino and Buffalo.
 
 ```{r}
 unsolved_plot =
@@ -121,10 +121,17 @@ unsolved_plot =
   mutate(city = forcats::fct_reorder(city, estimate)) |> 
 ggplot(aes(x = city, y = estimate, fill = city))+
   geom_bar(stat = "identity")+
+   geom_errorbar(
+    aes(ymin = conf.low, ymax = conf.high),
+    position = position_dodge(width = 0.9),
+    width = 0.25
+  ) +
   labs(title = "Estimated proportion of unsolved murders by city", x = "City", y = "Proportion of murders that are unsolved") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
 print(unsolved_plot)
 ```
+
+
 
 
