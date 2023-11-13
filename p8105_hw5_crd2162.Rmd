@@ -77,7 +77,9 @@ murder_data |>
     total_unsolved = sum(
            disposition %in% c("Closed without arrest", "Open/No arrest")
          )) |> 
-  with(prop.test(total_unsolved,total_murder))
+  with(prop.test(total_unsolved,total_murder)) |> 
+  broom::tidy() |> 
+  select(estimate, conf.low, conf.high)
   
 ```
 
