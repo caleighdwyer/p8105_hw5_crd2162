@@ -89,7 +89,7 @@ The chunk below creates a function that applies the prop.test used above, produc
 
 ```{r}
 # function 
-prop_function <- function(dataset, name) {
+prop_function = function(dataset, name) {
   prop = dataset |> 
   filter(city_state == name) |> 
   summarize(
@@ -135,8 +135,31 @@ print(unsolved_plot)
 
 ## Problem 2:Experimental data
 
+
 ```{r}
-list.files(path = "./data/data_csv")
+zip_data =
+list.files(path = "./data/data_csv", full.names = TRUE)
+
+#example
+subject_data = 
+    read_csv("./data/data_csv/con_01.csv") |> 
+    janitor::clean_names()
+  
+# function 
+read_function = function(filename) {
+  subject_data = 
+    read_csv(filename) |> 
+    janitor::clean_names()
+  return(subject_data)
+}
+
+
+table = map(zip_data, ~ read_function(.x))
+
+all_data = 
+  tibble(subject = zip_data, subject_data = table) |> 
+  unnest(cols = c(subject_data))
+
 ```
 
 
