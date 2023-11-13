@@ -138,7 +138,7 @@ print(unsolved_plot)
 
 The following chunk uses a function to read multiple csv files from a zip folder. Each .csv file represents longitudinal data for either a control or experimental group subject.
 
-```{r}
+```{r, message = FALSE}
 zip_data =
 list.files(path = "./data/data_csv", full.names = TRUE)
 
@@ -155,6 +155,7 @@ read_function = function(filename) {
   return(subject_data)
 }
 
+#map
 
 table = map(zip_data, ~ read_function(.x))
 
@@ -172,7 +173,23 @@ tidy_data =
   mutate(
     id = sub(".csv", "", basename(subject)),
     group = ifelse(str_detect(id, "^exp"), "experimental", "control")) |> 
+  pivot_longer(week_1:week_8,
+               names_to = "time_point",
+               values_to = "observation") |> 
   select(id, group, everything(), -subject)
 ```
 
+A spaghetti plot is created in the chunk below showing observations on each subject over time by group. This graph shows that the experimental group had greater change in the value of the observation over time, as the value of the observation at week 8 is higher among all experimental group subjects compared to control group, even thought experimental and control group subjects had simillar observation values at baseline.
+
+```{r}
+subject_graph =
+  tidy_data |> 
+  ggplot(aes(x = time_point, y = observation, group = id, color = group))+
+  geom_point()+
+  geom_line()+
+  labs(title = "Changes in observation by subject and group over 8 weeks", x = "Week", y = "Observation") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+print(subject_graph)
+```
 
