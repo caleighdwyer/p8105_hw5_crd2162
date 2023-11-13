@@ -66,4 +66,19 @@ murder_data |>
   knitr::kable()
 ```
 
+We will now use the prop.test function to estimate the proportion of homicides that are unsolved in Baltimore, MD. 
+
+```{r}
+prop_murder =
+murder_data |> 
+  filter(city_state == "Baltimore, MD") |> 
+  summarize(
+    total_murder = n(),
+    total_unsolved = sum(
+           disposition %in% c("Closed without arrest", "Open/No arrest")
+         )) |> 
+  with(prop.test(total_unsolved,total_murder))
+  
+```
+
 
