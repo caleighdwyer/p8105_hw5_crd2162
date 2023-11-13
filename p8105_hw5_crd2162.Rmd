@@ -133,5 +133,11 @@ print(unsolved_plot)
 ```
 
 
+## Problem 2:Experimental data
+
+```{r}
+list.files(path = "./data/data_csv")
+```
+
 
 
