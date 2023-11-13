@@ -8,6 +8,7 @@ output: github_document
 
 ```{r, include = FALSE, message = FALSE, warning = FALSE}
 library(tidyverse)
+library(stringr)
 
 knitr::opts_chunk$set(
 	echo = TRUE,
@@ -135,6 +136,7 @@ print(unsolved_plot)
 
 ## Problem 2:Experimental data
 
+The following chunk uses a function to read multiple csv files from a zip folder. Each .csv file represents longitudinal data for either a control or experimental group subject.
 
 ```{r}
 zip_data =
@@ -162,5 +164,15 @@ all_data =
 
 ```
 
+The combined dataset containing data for all subjects will be tidied in the following chunk.The subject ID was pulled from the file name, creating a new column called "id". The experimental group was then pulled from the "id," creating a new column called "group". 
+
+```{r}
+tidy_data =
+  all_data |> 
+  mutate(
+    id = sub(".csv", "", basename(subject)),
+    group = ifelse(str_detect(id, "^exp"), "experimental", "control")) |> 
+  select(id, group, everything(), -subject)
+```
 
 
