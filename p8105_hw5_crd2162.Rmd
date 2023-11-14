@@ -193,3 +193,58 @@ subject_graph =
 print(subject_graph)
 ```
 
+## Problem 3: Simulation
+
+```{r}
+set.seed(1)
+
+#write a function to define parameters
+sim_power = function(n = 30, sigma = 5, mu = 0){
+  sim_data = tibble(
+    x = rnorm(n, mean = mu, sd = sigma),
+  )
+  
+  sim_data |> 
+    summarize(
+      mu_hat = mean(x),
+      sigma_hat = sd(x)
+    )
+  
+  return(sim_data)
+}
+
+
+#create dataset including 5000 iterations of function above
+sim_results =
+  expand_grid(
+    n = 30,
+    iter = 1:5000
+  ) |> 
+  mutate(
+    estimate_df = map(n, sim_power)
+  )
+
+#write function to run t test. Mu can be changed.
+sim_power_repeat = function(mu) {
+  df = expand_grid(
+    n = 30,
+    iter = 1:5000
+  ) |> 
+  mutate(
+    mean = mu,
+    estimate_df = map(n, sim_power),
+    estimates = map(estimate_df, ~ broom::tidy(t.test(.x, mu = mu)))
+  ) |> 
+  unnest(c(estimates))
+  return(df)
+}
+
+#run t test function nfor 7 different mu and combine outputs
+sim_results_df =   
+  map(0:6, ~ sim_power_repeat(.x)) |> 
+  bind_rows()
+
+
+
+```
+
