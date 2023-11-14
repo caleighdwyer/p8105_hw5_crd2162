@@ -9,7 +9,7 @@ output: github_document
 ```{r, include = FALSE, message = FALSE, warning = FALSE}
 library(tidyverse)
 library(stringr)
-
+library(viridis)
 knitr::opts_chunk$set(
 	echo = TRUE,
 	warning = FALSE,
@@ -29,112 +29,79 @@ scale_colour_discrete = scale_colour_viridis_d
 scale_fill_discrete = scale_fill_viridis_d
 ```
 
-## Problem 1: Homicide Data
 
-The chunk below loads data from the Washington Post on homicide trends in the 50 largest US cities. 
+## Problem 1
 
-```{r load_murder_data}
-murder_data =
-  read_csv("./data/homicide-data.csv") |> 
-  janitor::clean_names() |> 
-  select(-uid, -victim_last, -victim_first) |> 
-  unite(city_state, city, state, sep = ", ") |> 
-  mutate(city_state = 
-           if_else(
-             city_state == "Tulsa, AL", "Tulsa, OK", city_state
-           ))
-```
-
-
-The dataset contains information on `r murder_data |> nrow()` criminal homicides reported from 2007 to 2015. The dataset describes the race, age, and sex of each victim, the city and state in which the homicide occurred, the exact latitude and longitude of the crime, and the "disposition" of the crime, which describes whether the case is open or closed and whether an arrest was made. One homicide was misattributed to Tulsa, Alabama when the latitude and longitude indicate that the crime occurred in Oklahoma; this was corrected in the cleaned dataset.
-
-The following chunk summarizes the total number of homicides in each city. Chicago, Philadelphia, Houston, Baltimore, and Detroit had the highest number of total homicides, in that order.
-
-```{r total_murders}
-murder_data |> 
-  count(city_state) |> 
-  arrange(desc(n)) |> 
-  knitr::kable()
-```
-
-The following chunk summarizes the total number of unsolved homicides in each city, or those in which the disposition is "Closed without arrest" or "Open/No arrest". Chicago, Baltimore, Houston, Detroit, and Philadelphia had the highest number of unsolved homicides, in that order.
+For this problem, we are interested in data gathered and made public by _The Washington Post_ on homicides in 50 large U.S. cities. The code chunk below imports and cleans the data.
 
 ```{r}
-murder_data |> 
-  filter(disposition %in% c("Closed without arrest", "Open/No arrest")) |> 
-  count(city_state) |> 
-  arrange(desc(n)) |> 
-  knitr::kable()
+homicide_df = 
+  read_csv("data/homicide-data.csv", na = c("", "NA", "Unknown")) %>%
+  mutate(
+    city_state = str_c(city, state, sep = ", "),
+    resolution = case_when(
+      disposition == "Closed without arrest" ~ "unsolved",
+      disposition == "Open/No arrest"        ~ "unsolved",
+      disposition == "Closed by arrest"      ~ "solved"
+    )
+  ) %>% 
+  filter(city_state != "Tulsa, AL") 
 ```
 
-We will now use the prop.test function to estimate the proportion of homicides that are unsolved in Baltimore, MD. The estimated proportion of unsolved homicides in Baltimore was 64.6% with a confidence interval of 62.8%-66.3%
+The resulting dataframe has `r nrow(homicide_df)` entries, on variables that include the victim name, race, age, and sex; the date the homicide was reported; and the location of the homicide. In cleaning, I created a `city_state` variable that includes both city and state, and a `resolution` variable to indicate whether the case was closed by arrest. I also excluded one entry in Tulsa, AL, which is not a major US city and is most likely a data entry error. 
+
+In the next code chunk, I group within cities and summarize to produce the total number of homicides and the number that are solved. 
 
 ```{r}
-prop_bmd =
-murder_data |> 
-  filter(city_state == "Baltimore, MD") |> 
+city_homicide_df = 
+  homicide_df %>% 
+  select(city_state, disposition, resolution) %>% 
+  group_by(city_state) %>% 
   summarize(
-    total_murder = n(),
-    total_unsolved = sum(
-           disposition %in% c("Closed without arrest", "Open/No arrest")
-         )) |> 
-  with(prop.test(total_unsolved,total_murder)) |> 
-  broom::tidy() |> 
-  select(estimate, conf.low, conf.high)
-
-print(prop_bmd)
-
+    hom_total = n(),
+    hom_unsolved = sum(resolution == "unsolved"))
 ```
 
-The chunk below creates a function that applies the prop.test used above, producing the estimated proportion of unsolved murders for each input along with the confidence interval. Then, map is used to pass a list of the 50 cities through the function, producing the output for each city. The outputs are then consolidated into a tibble.
+Focusing only on Baltimore, MD, I can use the `prop.test` and `broom::tidy` functions to obtain an estimate and CI of the proportion of unsolved homicides in that city. The table below shows those values.
 
 ```{r}
-# function 
-prop_function = function(dataset, name) {
-  prop = dataset |> 
-  filter(city_state == name) |> 
-  summarize(
-    total_murder = n(),
-    total_unsolved = sum(
-           disposition %in% c("Closed without arrest", "Open/No arrest")
-         )) |> 
-  with(prop.test(total_unsolved,total_murder)) |> 
-  broom::tidy() |> 
-  select(estimate, conf.low, conf.high)
-  return(prop)
-}
+bmore_test = 
+  prop.test(
+    x = filter(city_homicide_df, city_state == "Baltimore, MD") %>% pull(hom_unsolved),
+    n = filter(city_homicide_df, city_state == "Baltimore, MD") %>% pull(hom_total)) 
 
-cities = unique(murder_data$city_state)
-table = map(cities, ~ prop_function(murder_data, .x))
-
-# Using list columns
-# Unnesting the list column
-prob_unsolved = 
-  tibble(city = cities, prop = table) |> 
-  unnest(cols = c(prop))
+broom::tidy(bmore_test) %>% 
+  knitr::kable(digits = 3)
 ```
 
-The chunk below produces a graph showing the estimated proportion of unsolved murders for each city (on a scale of 0 to 1) along with corresponding confidence intervals. The graph shows that Chicago, New Orleans, Baltimore, San Bernardino, and Buffalo had the five highest proportions of unsolved murders. Notably, the confidence interval for the proportion of unsolved murders was very narrow for Chicago and much wider for San Bernardino and Buffalo.
+Building on this code, I can use functions in the `purrr` package to obtain estimates and CIs for the proportion of unsolved homicides in each city in my dataset. The code below implements this analysis. 
 
 ```{r}
-unsolved_plot =
-  prob_unsolved |> 
-  mutate(city = forcats::fct_reorder(city, estimate)) |> 
-ggplot(aes(x = city, y = estimate, fill = city))+
-  geom_bar(stat = "identity")+
-   geom_errorbar(
-    aes(ymin = conf.low, ymax = conf.high),
-    position = position_dodge(width = 0.9),
-    width = 0.25
-  ) +
-  labs(title = "Estimated proportion of unsolved murders by city", x = "City", y = "Proportion of murders that are unsolved") +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
-
-print(unsolved_plot)
+test_results = 
+  city_homicide_df %>% 
+  mutate(
+    prop_tests = map2(hom_unsolved, hom_total, \(x, y) prop.test(x = x, n = y)),
+    tidy_tests = map(prop_tests, broom::tidy)) %>% 
+  select(-prop_tests) %>% 
+  unnest(tidy_tests) %>% 
+  select(city_state, estimate, conf.low, conf.high) %>% 
+  mutate(city_state = fct_reorder(city_state, estimate))
 ```
 
+Finally, I make a plot showing the estimate (and CI) of the proportion of unsolved homicides in each city.
 
-## Problem 2:Experimental data
+```{r}
+test_results %>% 
+  mutate(city_state = fct_reorder(city_state, estimate)) %>% 
+  ggplot(aes(x = city_state, y = estimate)) + 
+  geom_point() + 
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high)) + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+This figure suggests a very wide range in the rate at which homicides are solved -- Chicago is noticeably high and, given the narrowness of the CI, likely is the location of many homicides. 
+
+## Problem 2: Experimental data
 
 The following chunk uses a function to read multiple csv files from a zip folder. Each .csv file represents longitudinal data for either a control or experimental group subject.
 
