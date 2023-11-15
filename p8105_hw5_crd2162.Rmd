@@ -36,7 +36,7 @@ For this problem, we are interested in data gathered and made public by _The Was
 
 ```{r}
 homicide_df = 
-  read_csv("data/homicide-data.csv", na = c("", "NA", "Unknown")) %>%
+  read_csv("data/homicide-data.csv", na = c("", "NA", "Unknown")) |> 
   mutate(
     city_state = str_c(city, state, sep = ", "),
     resolution = case_when(
@@ -44,7 +44,7 @@ homicide_df =
       disposition == "Open/No arrest"        ~ "unsolved",
       disposition == "Closed by arrest"      ~ "solved"
     )
-  ) %>% 
+  ) |> 
   filter(city_state != "Tulsa, AL") 
 ```
 
@@ -54,9 +54,9 @@ In the next code chunk, I group within cities and summarize to produce the total
 
 ```{r}
 city_homicide_df = 
-  homicide_df %>% 
-  select(city_state, disposition, resolution) %>% 
-  group_by(city_state) %>% 
+  homicide_df |> 
+  select(city_state, disposition, resolution) |> 
+  group_by(city_state) |> 
   summarize(
     hom_total = n(),
     hom_unsolved = sum(resolution == "unsolved"))
@@ -67,10 +67,10 @@ Focusing only on Baltimore, MD, I can use the `prop.test` and `broom::tidy` func
 ```{r}
 bmore_test = 
   prop.test(
-    x = filter(city_homicide_df, city_state == "Baltimore, MD") %>% pull(hom_unsolved),
-    n = filter(city_homicide_df, city_state == "Baltimore, MD") %>% pull(hom_total)) 
+    x = filter(city_homicide_df, city_state == "Baltimore, MD") |>  pull(hom_unsolved),
+    n = filter(city_homicide_df, city_state == "Baltimore, MD") |>  pull(hom_total)) 
 
-broom::tidy(bmore_test) %>% 
+broom::tidy(bmore_test) |> 
   knitr::kable(digits = 3)
 ```
 
@@ -78,21 +78,21 @@ Building on this code, I can use functions in the `purrr` package to obtain esti
 
 ```{r}
 test_results = 
-  city_homicide_df %>% 
+  city_homicide_df |>  
   mutate(
     prop_tests = map2(hom_unsolved, hom_total, \(x, y) prop.test(x = x, n = y)),
-    tidy_tests = map(prop_tests, broom::tidy)) %>% 
-  select(-prop_tests) %>% 
-  unnest(tidy_tests) %>% 
-  select(city_state, estimate, conf.low, conf.high) %>% 
+    tidy_tests = map(prop_tests, broom::tidy)) |>  
+  select(-prop_tests) |> 
+  unnest(tidy_tests)|> 
+  select(city_state, estimate, conf.low, conf.high) |> 
   mutate(city_state = fct_reorder(city_state, estimate))
 ```
 
 Finally, I make a plot showing the estimate (and CI) of the proportion of unsolved homicides in each city.
 
 ```{r}
-test_results %>% 
-  mutate(city_state = fct_reorder(city_state, estimate)) %>% 
+test_results |>  
+  mutate(city_state = fct_reorder(city_state, estimate)) |>  
   ggplot(aes(x = city_state, y = estimate)) + 
   geom_point() + 
   geom_errorbar(aes(ymin = conf.low, ymax = conf.high)) + 
@@ -162,6 +162,10 @@ print(subject_graph)
 
 ## Problem 3: Simulation
 
+In this problem, we will conduct a simulation to explore power in a one sample t-test.
+
+First, I will write a function called sim_power to create a random sample from a normal distribution with an n of 30, a sigma of 5, and a mu of 0. This function also calculates the sample mean (mu_hat) and sample sigma (sigma_hat). The sample is then returned as a tibble.
+
 ```{r}
 set.seed(1)
 
@@ -180,7 +184,11 @@ sim_power = function(n = 30, sigma = 5, mu = 0){
   return(sim_data)
 }
 
+```
 
+Then, I will use map to conduct 5000 iterations of the function above. The results of the iterations are saved as a dataframe called sim_results.
+
+```{r}
 #create dataset including 5000 iterations of function above
 sim_results =
   expand_grid(
@@ -191,6 +199,11 @@ sim_results =
     estimate_df = map(n, sim_power)
   )
 
+```
+
+I will then write a function called sim_power_repeat in which the same 5000 iterations can be done, except the mu can be changed. This function also maps a tidied t-test to the 5000 iterations. It is a test of the hypothesis of mu = 0 using alpha = 0.05. The outputs from the t-tests are saved as a dataframe called estimates which are then unnested by the function. The unnested results of the t-tests on the iterations in this function are returned as "df".
+
+```{r}
 #write function to run t test. Mu can be changed.
 sim_power_repeat = function(mu) {
   df = expand_grid(
@@ -198,7 +211,7 @@ sim_power_repeat = function(mu) {
     iter = 1:5000
   ) |> 
   mutate(
-    mean = mu,
+    population_mean = mu,
     estimate_df = map(n, sim_power),
     estimates = map(estimate_df, ~ broom::tidy(t.test(.x, mu = mu)))
   ) |> 
@@ -206,12 +219,75 @@ sim_power_repeat = function(mu) {
   return(df)
 }
 
+```
+
+Now we run the sim_power_repeat function using map. In the chunk below, the sim_power_repeat function is mapped to 7 different iterations of mu (mu = 0:6). The 7 different iterations are then combined used bind_rows and consolidated into a dataframe called final_sim_results. 
+
+```{r}
 #run t test function nfor 7 different mu and combine outputs
-sim_results_df =   
+final_sim_results =   
   map(0:6, ~ sim_power_repeat(.x)) |> 
   bind_rows()
+  
+```
 
+Finally, the dataframe is tidied and called `final_sim_clean`. This dataframe includes only necessary columns and to include a new variable that calculates whether the null hypothesis was accepted or rejected called `null_hyp`. This variable is then used to calculate `power` for each population mean. 
 
+```{r}
+final_sim_clean =
+final_sim_results |> 
+  select(iter, population_mean, estimate, p.value, conf.low, conf.high) |> 
+  rename(mu_hat = estimate) |> 
+  mutate(
+    null_hyp = ifelse(
+                 p.value > 0.05, "accept", "reject"
+              )) |> 
+  group_by(population_mean) |> 
+  mutate(
+    total_accept = sum(null_hyp == "accept"),
+    total_reject = sum(null_hyp == "reject"),
+  power = total_reject/(total_reject + total_accept),
+  average_mu_hat = mean(mu_hat))
 
+```
+
+Now I will create a plot that shows the proportion of times the null was rejected (`power`) on the y axis and the true value of mu on the x axis. This plot shows that as the true population mean (the effect size) increases, so does the power. 
+
+```{r}
+sim_plot_1 =
+final_sim_clean |> 
+ggplot(aes(x = population_mean, y = power))+
+geom_point()+
+geom_line() +
+labs(title = "Power increases as true mean increases", x = "True Mean", y = "Power")
+
+print(sim_plot_1)
+```
+
+Next, we'll make a plot showing the average estimate of mu_hat on the y axis and the true value of the population mean on the x axis. There does not appear to be a linear pattern to the average estiamte of mu hat as the population mean increases.
+
+```{r}
+sim_plot_2 =
+final_sim_clean |> 
+ggplot(aes(x = population_mean, y = average_mu_hat))+
+geom_point()+
+geom_line() +
+labs(title = "Average estimate of sample mean by population mean", x = "Population Mean", y = "Average estimate of mu hat")
+
+print(sim_plot_2)
+```
+
+Lastly, we'll create a plot that shows the average estimate of mu hat only in samples for which the null was rejected on the y axis and the true value of mu on the x axis. This plot looks almost the same as the second plot created above, despite the fact that it only includes sample means from in which the null hypothesis was rejected. It does not appear that the sample average of mu hat across tests for which the null is rejected approximates the true value of mu. The sample average of mu hat across tests is very close to 0. This is likely because the effect size and sample size are both very small for this simulation, reducing the power. A higher level of power is necessary to reject a false null hypothesis.
+
+```{r}
+sim_plot_3 =
+final_sim_clean |> 
+  filter(null_hyp == "reject") |> 
+ggplot(aes(x = population_mean, y = average_mu_hat))+
+geom_point()+
+geom_line() +
+labs(title = "Average estimate of sample mean by population mean among rejected hypothesis tests", x = "Population Mean", y = "Average estimate of mu hat among rejected hypothesis tests")
+
+print(sim_plot_3)
 ```
 
