@@ -164,12 +164,11 @@ print(subject_graph)
 
 In this problem, we will conduct a simulation to explore power in a one sample t-test.
 
-First, I will write a function called sim_power to create a random sample from a normal distribution with an n of 30, a sigma of 5, and a mu of 0. This function also calculates the sample mean (mu_hat) and sample sigma (sigma_hat). The sample is then returned as a tibble.
+First, I will write a function called `sim_power` to create a random sample from a normal distribution with an n of 30, a sigma of 5, and a mu of 0. This function also calculates the sample mean (`mu_hat`) and sample sigma (`sigma_hat`). The sample is then returned as a tibble.
 
 ```{r}
 set.seed(1)
 
-#write a function to define parameters
 sim_power = function(n = 30, sigma = 5, mu = 0){
   sim_data = tibble(
     x = rnorm(n, mean = mu, sd = sigma),
@@ -186,10 +185,9 @@ sim_power = function(n = 30, sigma = 5, mu = 0){
 
 ```
 
-Then, I will use map to conduct 5000 iterations of the function above. The results of the iterations are saved as a dataframe called sim_results.
+Then, I will use map to conduct 5000 iterations of the function above. The results of the iterations are saved as a dataframe called `sim_results`.
 
 ```{r}
-#create dataset including 5000 iterations of function above
 sim_results =
   expand_grid(
     n = 30,
@@ -201,10 +199,9 @@ sim_results =
 
 ```
 
-I will then write a function called sim_power_repeat in which the same 5000 iterations can be done, except the mu can be changed. This function also maps a tidied t-test to the 5000 iterations. It is a test of the hypothesis of mu = 0 using alpha = 0.05. The outputs from the t-tests are saved as a dataframe called estimates which are then unnested by the function. The unnested results of the t-tests on the iterations in this function are returned as "df".
+I will then write a function called `sim_power_repeat` in which the same 5000 iterations can be done, except the mu can be changed. This function also maps a tidied t-test to the 5000 iterations. It is a test of the hypothesis of mu = 0 using alpha = 0.05. The outputs from the t-tests are saved as a dataframe called estimates which are then unnested by the function. The unnested results of the t-tests on the iterations in this function are returned as `df`.
 
 ```{r}
-#write function to run t test. Mu can be changed.
 sim_power_repeat = function(mu) {
   df = expand_grid(
     n = 30,
@@ -212,7 +209,7 @@ sim_power_repeat = function(mu) {
   ) |> 
   mutate(
     population_mean = mu,
-    estimate_df = map(n, sim_power),
+    estimate_df = map2(n, mu, \(n, mu) sim_power(n = n, mu = mu)),
     estimates = map(estimate_df, ~ broom::tidy(t.test(.x, mu = mu)))
   ) |> 
   unnest(c(estimates))
@@ -221,10 +218,9 @@ sim_power_repeat = function(mu) {
 
 ```
 
-Now we run the sim_power_repeat function using map. In the chunk below, the sim_power_repeat function is mapped to 7 different iterations of mu (mu = 0:6). The 7 different iterations are then combined used bind_rows and consolidated into a dataframe called final_sim_results. 
+Now we run the sim_power_repeat function using map. In the chunk below, the `sim_power_repeat` function is mapped to 7 different iterations of mu (mu = 0:6). The 7 different iterations are then combined used bind_rows and consolidated into a dataframe called `final_sim_results`. 
 
 ```{r}
-#run t test function nfor 7 different mu and combine outputs
 final_sim_results =   
   map(0:6, ~ sim_power_repeat(.x)) |> 
   bind_rows()
@@ -251,7 +247,7 @@ final_sim_results |>
 
 ```
 
-Now I will create a plot that shows the proportion of times the null was rejected (`power`) on the y axis and the true value of mu on the x axis. This plot shows that as the true population mean (the effect size) increases, so does the power. 
+Now I will create a plot that shows the proportion of times the null was rejected (`power`) on the y axis and the true value of mu on the x axis. There is no linear pattern to the changes in power with changes in population mean in this graph. This seems to indicate that changes in power are due to random variation in the sampling.
 
 ```{r}
 sim_plot_1 =
@@ -259,12 +255,12 @@ final_sim_clean |>
 ggplot(aes(x = population_mean, y = power))+
 geom_point()+
 geom_line() +
-labs(title = "Power increases as true mean increases", x = "True Mean", y = "Power")
+labs(title = "Power and changes in population mean", x = "True Mean", y = "Power")
 
 print(sim_plot_1)
 ```
 
-Next, we'll make a plot showing the average estimate of mu_hat on the y axis and the true value of the population mean on the x axis. There does not appear to be a linear pattern to the average estiamte of mu hat as the population mean increases.
+Next, we'll make a plot showing the average estimate of mu_hat on the y axis and the true value of the population mean on the x axis. There is a strong linear pattern to this graph; as the population mean increases by one unit, the average estimate of mu hat increases by one unit.
 
 ```{r}
 sim_plot_2 =
@@ -277,7 +273,7 @@ labs(title = "Average estimate of sample mean by population mean", x = "Populati
 print(sim_plot_2)
 ```
 
-Lastly, we'll create a plot that shows the average estimate of mu hat only in samples for which the null was rejected on the y axis and the true value of mu on the x axis. This plot looks almost the same as the second plot created above, despite the fact that it only includes sample means from in which the null hypothesis was rejected. It does not appear that the sample average of mu hat across tests for which the null is rejected approximates the true value of mu. The sample average of mu hat across tests is very close to 0. This is likely because the effect size and sample size are both very small for this simulation, reducing the power. A higher level of power is necessary to reject a false null hypothesis.
+Lastly, we'll create a plot that shows the average estimate of mu hat only in samples for which the null was rejected on the y axis and the true value of mu on the x axis. This plot looks identical to the second plot created above, despite the fact that it only includes sample means from in which the null hypothesis was rejected. This indicates that the average estimate of mu hat for samples in which the null hypothesis is rejected is approximately the same as the population mean. This is because we conducted a large random sampling simulation of over 5000 samples per population mean. With large numbers of sampling from the same underlying population, we expect the statistic to closely approximate the parameter. 
 
 ```{r}
 sim_plot_3 =
